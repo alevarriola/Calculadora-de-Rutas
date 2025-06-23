@@ -16,7 +16,7 @@ let columnas = 0;
 boton.addEventListener("click", function() {
 
     // damos click a iniciar
-    if (paso == 0) {
+    if (paso === 0) {
 
         // Crear inputs para filas y columnas
         const inputFilas = document.createElement("input");
@@ -41,7 +41,7 @@ boton.addEventListener("click", function() {
     }
 
     // damos click a generar tablero
-    else if (paso === 1) {
+    else if (paso === 1) { 
 
         // guardamos en una variable los inputs
         filas = parseInt(document.getElementById("input-filas").value);
@@ -66,12 +66,20 @@ boton.addEventListener("click", function() {
         generarCuadras(tablero, filas, columnas);
 
         // cambiamos texto y vamos al ultimo paso
-        boton.textContent = "Resetear tablero"; 
+        boton.textContent = "Resolver tablero"; 
         paso = 3;
     }
 
-    // damos click a resetear tablero
+    // damos click a resolver tablero
      else if (paso === 3) {
+        moverPasoAPaso(tablero, filas, columnas);
+
+        boton.textContent = "Reiniciar tablero"; 
+        paso = 4;
+     }
+
+     // damos click a resetear tablero
+     else if (paso === 4) {
         resetearTablero();
      }
 });
@@ -92,13 +100,27 @@ function generarTablero(filas, columnas) {
 
             // Crear elemento celda
             const celda = document.createElement("button");
-            celda.className = "bg-blue-300 border border-white";
+            celda.className = "bg-blue-100 border border-white";
             celda.style.width = "20px";
             celda.style.height = "20px";
 
             // cada celda tiene esta funcion adentro
-            celda.addEventListener("click", function() {
-                celda.classList.toggle("bg-red-300");
+            celda.addEventListener("click", function () {
+                if (paso === 3) {
+                    // Definir entrada o salida
+                    if (!document.querySelector('[data-entrada="true"]')) {
+                        celda.classList.add("bg-green-700");
+                        celda.dataset.entrada = "true";
+                    } else if (!document.querySelector('[data-salida="true"]')) {
+                        celda.classList.add("bg-red-700");
+                        celda.dataset.salida = "true";
+                    }
+
+                } else if (paso === 4) {
+                    // Alternar como celda ocupada
+                    celda.classList.toggle("bg-gray-400");
+                    celda.dataset.ocupado = celda.dataset.ocupado === "true" ? "false" : "true";
+                }
             });
 
             // Agregarlo al body
@@ -135,6 +157,44 @@ function generarCuadras(tablero, filas, columnas) {
             }
         }
     }
+    // rellenamos bordes horizontales
+    for (let fila = 0; fila < filas; fila += 4) {
+        
+        // verificamos el resto de columnas
+        const colRestante = columnas % 4;
+        const colInicio = columnas - colRestante;
+
+        // si el resto es mayor a 0
+        if (colRestante > 0) {
+
+            // probamos colocar 3 bloques, 2 0 1
+            for (let alto = 3; alto >= 1; alto--) {
+                const cuadra = { ancho: colRestante, alto: alto };
+
+                if (puedeColocarCuadra(tablero, fila, colInicio, cuadra.ancho, cuadra.alto, filas, columnas)) {
+                    colocarCuadra(tablero, fila, colInicio, cuadra.ancho, cuadra.alto);
+                    break;
+                }
+            }
+        }
+    }
+
+    // rellenamos bordes verticales 
+    for (let columna = 0; columna < columnas; columna += 4) {
+        const filaRestante = filas % 4;
+        const filaInicio = filas - filaRestante;
+
+        if (filaRestante > 0) {
+            for (let ancho = 3; ancho >= 1; ancho--) {
+                const cuadra = { ancho: ancho, alto: filaRestante };
+
+                if (puedeColocarCuadra(tablero, filaInicio, columna, cuadra.ancho, cuadra.alto, filas, columnas)) {
+                    colocarCuadra(tablero, filaInicio, columna, cuadra.ancho, cuadra.alto);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 function puedeColocarCuadra(tablero, filaInicio, colInicio, ancho, alto, filasTotales, columnasTotales) {
@@ -166,6 +226,114 @@ function colocarCuadra(tablero, filaInicio, colInicio, ancho, alto) {
             celda.dataset.ocupado = "true"; 
         }
     }
+}
+
+async function moverPasoAPaso(tablero, filas, columnas) {
+    let actual = encontrarCelda("entrada");
+
+    while (true) {
+        const salida = encontrarCelda("salida");
+        if (!salida) return;
+
+        const camino = encontrarCamino(tablero, filas, columnas, actual, salida);
+        if (!camino || camino.length < 2) {
+            console.warn("No hay camino disponible");
+            return;
+        }
+
+        // Avanzamos al siguiente paso
+        const siguiente = camino[1];
+        actual = siguiente;
+
+        const celda = tablero[siguiente.x][siguiente.y];
+        celda.classList.add("bg-green-400");
+
+        if (celda.dataset.salida === "true") {
+            console.log("Llegamos a la salida");
+            break;
+        }
+
+        await new Promise((res) => setTimeout(res, 500));
+    }
+}
+
+function encontrarCamino(tablero, filas, columnas, entrada, salida) {
+
+    // Nodo inicial y final
+    const inicio = { x: entrada.x, y: entrada.y, g: 0, f: 0 };
+    const fin = { x: salida.x, y: salida.y };
+
+    // lista de lugares a explorar y diccionario donde guardamos el padre
+    const openSet = [inicio];
+    const padre = new Map();
+
+    // una cordenada otrogada transformamos a texto, e iniciamos nuestro gscore
+    const key = (coord) => `${coord.x},${coord.y}`;
+    const gScore = new Map();
+    gScore.set(key(inicio), 0);
+
+
+    while (openSet.length > 0) {
+        // ordenamos por f mas baja
+        openSet.sort((a, b) => a.f - b.f);
+        const actual = openSet.shift();
+
+        if (actual.x === fin.x && actual.y === fin.y) {
+            return reconstruirCamino(padre, actual);
+        }
+
+        for (const [dx, dy] of [[0,1], [1,0], [0,-1], [-1,0]]) {
+            const nx = actual.x + dx;
+            const ny = actual.y + dy;
+
+            if (nx < 0 || ny < 0 || nx >= filas || ny >= columnas) continue;
+
+            const vecino = tablero[nx][ny];
+            if (vecino.dataset.ocupado === "true") continue;
+
+            const vecinoKey = `${nx},${ny}`;
+            const costoG = gScore.get(key(actual)) + 1;
+
+            if (!gScore.has(vecinoKey) || costoG < gScore.get(vecinoKey)) {
+                padre.set(vecinoKey, actual);
+                gScore.set(vecinoKey, costoG);
+                const costoGF = costoG + heuristica({x: nx, y: ny}, fin);
+
+                openSet.push({ x: nx, y: ny, g: costoG, f: costoGF });
+            }
+        }
+    }
+
+    console.warn("No se encontró un camino");
+}
+
+// Función heurística: distancia Manhattan
+function heuristica(a, b) {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+// dependiendo de lo que busque, retornar coordenadas
+function encontrarCelda(tipo) {
+    const celda = document.querySelector(`[data-${tipo}="true"]`);
+    if (!celda) return null;
+
+    for (let i = 0; i < tablero.length; i++) {
+        for (let j = 0; j < tablero[0].length; j++) {
+            if (tablero[i][j] === celda) return { x: i, y: j };
+        }
+    }
+    return null;
+}
+
+
+function reconstruirCamino(padre, actual) {
+    const camino = [actual];
+
+     while (padre.has(`${actual.x},${actual.y}`)) {
+        actual = padre.get(`${actual.x},${actual.y}`);
+        camino.unshift(actual);
+    }
+    return camino;
 }
 
 function resetearTablero() {
