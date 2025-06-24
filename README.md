@@ -56,7 +56,7 @@ git clone https://github.com/alevarriola/Calculadora-de-Rutas.git
 
 Alejandro A.
 
-Desarrollador en constante formación.
+Programador en constante formación.
 
 GitHub: @alevarriola
 
