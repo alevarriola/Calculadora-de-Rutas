@@ -1,11 +1,10 @@
-
 // 3 variables para nuestros 3 componentes en html
 const boton = document.getElementById("boton-principal");
 const contenedor = document.getElementById("tablero");
 const cuerpo = document.getElementById("cuerpo")
 
 // una variable para la accion del boton principal
-let paso = 0;
+let estado = 0;
 
 // nuestras 3 cariables globales
 let tablero = [];
@@ -16,7 +15,7 @@ let columnas = 0;
 boton.addEventListener("click", function() {
 
     // damos click a iniciar
-    if (paso === 0) {
+    if (estado === 0) {
 
         // Crear inputs para filas y columnas
         const inputFilas = document.createElement("input");
@@ -37,15 +36,21 @@ boton.addEventListener("click", function() {
 
         // cambiamos texto del boton y asignamos el siguiente paso
         boton.textContent = "Generar tablero";
-        paso = 1;
+        estado = 1;
     }
 
     // damos click a generar tablero
-    else if (paso === 1) { 
+    else if (estado === 1) { 
 
         // guardamos en una variable los inputs
         filas = parseInt(document.getElementById("input-filas").value);
         columnas = parseInt(document.getElementById("input-columnas").value);
+
+        // validacion de datos ingresados por usuario
+        if (isNaN(filas) || isNaN(columnas) || filas <= 0 || columnas <= 0) {
+            alert("Introduce números válidos.");
+            return;
+        }
 
         // llamamos a la funcion generar tablero
         generarTablero(filas, columnas);
@@ -56,30 +61,40 @@ boton.addEventListener("click", function() {
 
         // cambiamos texto y asignamos el siguiente paso
         boton.textContent = "Generar calles";
-        paso = 2;
+        estado = 2;
     }
     
     // damos click en generar calles
-    else if (paso === 2) {
+    else if (estado === 2) {
 
         // llamamos a la funcion generar cuadras
         generarCuadras(tablero, filas, columnas);
 
         // cambiamos texto y vamos al ultimo paso
         boton.textContent = "Resolver tablero"; 
-        paso = 3;
+        estado = 3;
     }
 
     // damos click a resolver tablero
-     else if (paso === 3) {
+     else if (estado === 3) {
+
+        // Validamos que haya una entrada y una salida antes de continuar
+        const entrada = document.querySelector('[data-entrada="true"]');
+        const salida = document.querySelector('[data-salida="true"]');
+
+        if (!entrada || !salida) {
+            alert("Debes seleccionar una entrada (verde) y una salida (roja) antes de resolver el tablero.");
+            return; 
+        }
+
         moverPasoAPaso(tablero, filas, columnas);
 
         boton.textContent = "Reiniciar tablero"; 
-        paso = 4;
+        estado = 4;
      }
 
      // damos click a resetear tablero
-     else if (paso === 4) {
+     else if (estado === 4) {
         resetearTablero();
      }
 });
@@ -106,7 +121,7 @@ function generarTablero(filas, columnas) {
 
             // cada celda tiene esta funcion adentro
             celda.addEventListener("click", function () {
-                if (paso === 3) {
+                if (estado === 3) {
                     // Definir entrada o salida
                     if (!document.querySelector('[data-entrada="true"]')) {
                         celda.classList.add("bg-green-700");
@@ -116,7 +131,7 @@ function generarTablero(filas, columnas) {
                         celda.dataset.salida = "true";
                     }
 
-                } else if (paso === 4) {
+                } else if (estado === 4) {
                     // Alternar como celda ocupada
                     celda.classList.toggle("bg-gray-400");
                     celda.dataset.ocupado = celda.dataset.ocupado === "true" ? "false" : "true";
@@ -229,12 +244,15 @@ function colocarCuadra(tablero, filaInicio, colInicio, ancho, alto) {
 }
 
 async function moverPasoAPaso(tablero, filas, columnas) {
+    
     let actual = encontrarCelda("entrada");
 
     while (true) {
+        // guardamos la variable salida y verificamos si existe
         const salida = encontrarCelda("salida");
         if (!salida) return;
 
+        // optenemos el camino y verificamos que exista
         const camino = encontrarCamino(tablero, filas, columnas, actual, salida);
         if (!camino || camino.length < 2) {
             console.warn("No hay camino disponible");
@@ -245,15 +263,18 @@ async function moverPasoAPaso(tablero, filas, columnas) {
         const siguiente = camino[1];
         actual = siguiente;
 
+        // cambiamos el color de la celda
         const celda = tablero[siguiente.x][siguiente.y];
         celda.classList.add("bg-green-400");
 
+        // si es la salida rompemos el buble
         if (celda.dataset.salida === "true") {
             console.log("Llegamos a la salida");
             break;
         }
 
-        await new Promise((res) => setTimeout(res, 500));
+        // esperamos 0.3 seg
+        await new Promise((res) => setTimeout(res, 300));
     }
 }
 
@@ -265,7 +286,7 @@ function encontrarCamino(tablero, filas, columnas, entrada, salida) {
 
     // lista de lugares a explorar y diccionario donde guardamos el padre
     const openSet = [inicio];
-    const padre = new Map();
+    const padres = new Map();
 
     // una cordenada otrogada transformamos a texto, e iniciamos nuestro gscore
     const key = (coord) => `${coord.x},${coord.y}`;
@@ -276,34 +297,42 @@ function encontrarCamino(tablero, filas, columnas, entrada, salida) {
     while (openSet.length > 0) {
         // ordenamos por f mas baja
         openSet.sort((a, b) => a.f - b.f);
-        const actual = openSet.shift();
+        const nodoActual = openSet.shift();
 
-        if (actual.x === fin.x && actual.y === fin.y) {
-            return reconstruirCamino(padre, actual);
+        // si es la salida retornamos la lista del camino
+        if (nodoActual.x === fin.x && nodoActual.y === fin.y) {
+            return reconstruirCamino(padres, nodoActual);
         }
 
+        // si no, recorremos todos sus vecinos
         for (const [dx, dy] of [[0,1], [1,0], [0,-1], [-1,0]]) {
-            const nx = actual.x + dx;
-            const ny = actual.y + dy;
+            const nx = nodoActual.x + dx;
+            const ny = nodoActual.y + dy;
 
+            // verificamos que este dentro del tablero
             if (nx < 0 || ny < 0 || nx >= filas || ny >= columnas) continue;
 
+            // verificamos que no sea una cuadra
             const vecino = tablero[nx][ny];
             if (vecino.dataset.ocupado === "true") continue;
 
-            const vecinoKey = `${nx},${ny}`;
-            const costoG = gScore.get(key(actual)) + 1;
+            // transformamos a key y optenemos su costo en G
+            const vecinoKey = key({ x: nx, y: ny });
+            const costoG = gScore.get(key(nodoActual)) + 1;
 
+            // si no tiene un gscore, o su score es menos al score ya asignado a esa celda
             if (!gScore.has(vecinoKey) || costoG < gScore.get(vecinoKey)) {
-                padre.set(vecinoKey, actual);
-                gScore.set(vecinoKey, costoG);
-                const costoGF = costoG + heuristica({x: nx, y: ny}, fin);
 
+                // asignamos como nuevo gscore y amacenamos su padre
+                padres.set(vecinoKey, nodoActual);
+                gScore.set(vecinoKey, costoG);
+
+                // calculamos la heuristica y agregamos a la lista de openset
+                const costoGF = costoG + heuristica({x: nx, y: ny}, fin);
                 openSet.push({ x: nx, y: ny, g: costoG, f: costoGF });
             }
         }
     }
-
     console.warn("No se encontró un camino");
 }
 
@@ -325,12 +354,15 @@ function encontrarCelda(tipo) {
     return null;
 }
 
-
+// con la coordenada que le damos y la lista padre, retornar una lista con el camino a recorrer
 function reconstruirCamino(padre, actual) {
     const camino = [actual];
 
+    // mientras mi dato tenga un padre
      while (padre.has(`${actual.x},${actual.y}`)) {
         actual = padre.get(`${actual.x},${actual.y}`);
+
+        // agregamos al comienzo de la lista
         camino.unshift(actual);
     }
     return camino;
